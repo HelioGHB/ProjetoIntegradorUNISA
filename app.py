@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import sqlite3
+from datetime import datetime
 from database import conectar_banco
 
 # Configuração inicial da página
@@ -105,7 +106,8 @@ else:
     st.title("Mercado Girassol")
     st.markdown("Painel de controle para o Mercado de Bairro")
 
-    aba_cadastro, aba_estoque = st.tabs(["Cadastrar Produto", "Visualizar Estoque"])
+    # Adicionada a aba de Alertas
+    aba_cadastro, aba_estoque, aba_alertas = st.tabs(["Cadastrar Produto", "Visualizar Estoque", "⚠️ Alertas e Validade"])
 
     # Cadastro de produtos
     with aba_cadastro:
@@ -148,29 +150,112 @@ else:
                     else:
                         st.error(f"{mensagem}")
 
+    # Carregar a base de dados uma única vez para usar nas abas seguintes
+    df_estoque = carregar_estoque()
+
     # Visualizar Estoque
     with aba_estoque:
         st.header("Estoque Atual")
         
-        df_estoque = carregar_estoque()
-                
         if df_estoque.empty or len(df_estoque.columns) < 10:
             st.info("Nenhum produto cadastrado no momento. Vá para a aba de cadastro para inserir o primeiro item.")
         else:
             try:
-                df_estoque.columns = ['ID', 'Código', 'Nome', 'Categoria', 'Custo (R$)', 'Venda (R$)', 'Qtd', 'Qtd Mínima', 'Validade', 'Cadastrado Por']
+                # Criando uma cópia para não afetar as outras abas
+                df_exibicao = df_estoque.copy()
+                df_exibicao.columns = ['ID', 'Código', 'Nome', 'Categoria', 'Custo (R$)', 'Venda (R$)', 'Qtd', 'Qtd Mínima', 'Validade', 'Cadastrado Por']
                 
                 # Tratamento para registros vazios
-                df_estoque['Código'] = df_estoque['Código'].fillna("Não Cadastrado")
-                df_estoque['Cadastrado Por'] = df_estoque['Cadastrado Por'].fillna("Sistema")
+                df_exibicao['Código'] = df_exibicao['Código'].fillna("Não Cadastrado")
+                df_exibicao['Cadastrado Por'] = df_exibicao['Cadastrado Por'].fillna("Sistema")
                 
                 # Exibição da tabela limpa
-                st.dataframe(df_estoque, use_container_width=True, hide_index=True)
+                st.dataframe(df_exibicao, use_container_width=True, hide_index=True)
                 
                 st.divider()
                 st.subheader("Resumo do Negócio")
                 col_res1, col_res2 = st.columns(2)
-                col_res1.metric("Total de Itens Diferentes", len(df_estoque))
-                col_res2.metric("Valor Total em Estoque (Venda)", f"R$ {(df_estoque['Venda (R$)'] * df_estoque['Qtd']).sum():.2f}")
+                col_res1.metric("Total de Itens Diferentes", len(df_exibicao))
+                col_res2.metric("Valor Total em Estoque (Venda)", f"R$ {(df_exibicao['Venda (R$)'] * df_exibicao['Qtd']).sum():.2f}")
             except Exception as e:
                 st.error(f"Erro ao organizar visualização dos dados: {e}")
+
+    # Aba de Alertas (Nova Seção)
+    with aba_alertas:
+        st.header("Painel de Alertas")
+        
+        if df_estoque.empty:
+            st.info("Nenhum produto cadastrado para gerar alertas.")
+        else:
+            # Padronizar nomes de colunas internos para facilitar a busca
+            df_alertas = df_estoque.copy()
+            df_alertas.columns = ['ID', 'Codigo', 'Nome', 'Categoria', 'Custo', 'Venda', 'Qtd', 'Qtd_Minima', 'Validade', 'Usuario']
+            
+            # Produtos com baixo estoque
+            st.subheader("Estoque Baixo ou Crítico")
+            
+            # Condição: Quantidade atual é menor ou igual à quantidade mínima configurada
+            df_baixo_estoque = df_alertas[df_alertas['Qtd'] <= df_alertas['Qtd_Minima']]
+            
+            if not df_baixo_estoque.empty:
+                st.error(f"Atenção: Existem {len(df_baixo_estoque)} produto(s) com quantidade igual ou abaixo do mínimo!")
+                # Seleciona apenas colunas relevantes para exibição amigável
+                st.dataframe(
+                    df_baixo_estoque[['Nome', 'Categoria', 'Qtd', 'Qtd_Minima']], 
+                    use_container_width=True, 
+                    hide_index=True
+                )
+            else:
+                st.success("Todos os produtos estão com níveis de estoque saudáveis.")
+                
+            st.divider()
+            
+            # Produtos próximos de vencer
+            st.subheader("📅 Alerta de Validade")
+            
+            # Configuração de quantos dias de antecedência você quer ser avisado (ex: 30 dias)
+            DIAS_PARA_ALERTA = 30
+            
+            hoje = datetime.now().date()
+            produtos_vencidos = []
+            produtos_perto_vencer = []
+            
+            # Loop para ler as datas salvas como string do SQLite e converter para comparação
+            for index, row in df_alertas.iterrows():
+                try:
+                    # Converte o padrão 'DD/MM/YYYY' de volta para formato de data real
+                    data_val = datetime.strptime(row['Validade'], '%d/%m/%Y').date()
+                    dias_restantes = (data_val - hoje).days
+                    
+                    dados_prod = {
+                        "Nome": row['Nome'],
+                        "Categoria": row['Categoria'],
+                        "Validade": row['Validade'],
+                        "Qtd": row['Qtd'],
+                        "Dias Restantes": dias_restantes
+                    }
+                    
+                    if dias_restantes < 0:
+                        produtos_vencidos.append(dados_prod)
+                    elif 0 <= dias_restantes <= DIAS_PARA_ALERTA:
+                        produtos_perto_vencer.append(dados_prod)
+                except Exception:
+                    # Ignora linhas que por ventura tenham erros de digitação na data
+                    pass
+
+            # Exibe os já vencidos (Crítico)
+            if produtos_vencidos:
+                st.error(f"🔴 CRÍTICO: Existem {len(produtos_vencidos)} produto(s) JÁ VENCIDO(S) no estoque!")
+                df_vencidos = pd.DataFrame(produtos_vencidos)
+                st.dataframe(df_vencidos[['Nome', 'Categoria', 'Validade', 'Qtd']], use_container_width=True, hide_index=True)
+            
+            # Exibe os próximos de vencer
+            if produtos_perto_vencer:
+                st.warning(f"🟡 ATENÇÃO: Existem {len(produtos_perto_vencer)} produto(s) que vencem nos próximos {DIAS_PARA_ALERTA} dias!")
+                df_perto = pd.DataFrame(produtos_perto_vencer)
+                # Ordena pelos que vão vencer mais rápido primeiro
+                df_perto = df_perto.sort_values(by="Dias Restantes")
+                st.dataframe(df_perto[['Nome', 'Categoria', 'Validade', 'Dias Restantes', 'Qtd']], use_container_width=True, hide_index=True)
+                
+            if not produtos_vencidos and not produtos_perto_vencer:
+                st.success(f"Nenhum produto vencido ou vencendo nos próximos {DIAS_PARA_ALERTA} dias.")
