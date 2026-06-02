@@ -35,8 +35,6 @@ O objetivo central foi projetar e implementar um software que substitua o contro
 * **Análise de Dados:** [Pandas](https://pandas.pydata.org/)
 * **Banco de Dados Relacional:** [SQLite](https://www.sqlite.org/) (Arquivo local `estoque.db`)
 
----
-
 ## 📂 Estrutura do Repositório
 
 ```text
@@ -49,5 +47,11 @@ O objetivo central foi projetar e implementar um software que substitua o contro
 Usuário, Senha, Nível de Acesso
 admin,   1234,  Administrador / Gerente
 operador, abc, Operador de Caixa / Estoquista
-
+```
+---
 O Autor: Desenvolvido por Greyke Helio - Sinta-se à vontade para se conectar ou dar uma olhada nos meus outros projetos de programação! Linkedin: https://www.linkedin.com/in/greyke-h%C3%A9lio-20327a370/
+
+
+
+
+
