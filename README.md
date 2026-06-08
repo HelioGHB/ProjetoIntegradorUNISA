@@ -49,8 +49,7 @@ admin,   1234,  Administrador / Gerente
 operador, abc, Operador de Caixa / Estoquista
 ```
 ---
-O Autor: Desenvolvido por Greyke Helio - Sinta-se à vontade para se conectar ou dar uma olhada nos meus outros projetos de programação! Linkedin: https://www.linkedin.com/in/greyke-h%C3%A9lio-20327a370/
-
+O Autor: Desenvolvido por Greyke Helio - Sinta-se à vontade para se conectar ou dar uma olhada nos meus outros projetos de programação! Linkedin: www.linkedin.com/in/helio-ghb
 
 
 
